@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LivingOS — macOS Environment</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{
+    --acrylic-bg: rgba(246,246,248,.78);
+    --acrylic-border: rgba(255,255,255,.5);
+    --titlebar-bg: rgba(246,246,248,.62);
+    --surface: #f5f5f7;
+    --surface-alt: #e8e8ec;
+    --text-primary: #1d1d1f;
+    --text-secondary: rgba(0,0,0,.6);
+    --hover-bg: rgba(0,0,0,.06);
+    --active-bg: rgba(0,0,0,.1);
+    --border: rgba(0,0,0,.08);
+    --accent: #007aff;
+    --menubar-bg: rgba(246,246,248,.55);
+  }
+  html.dark{
+    --acrylic-bg: rgba(28,28,30,.82);
+    --acrylic-border: rgba(255,255,255,.08);
+    --titlebar-bg: rgba(28,28,30,.65);
+    --surface: #1e1e20;
+    --surface-alt: #2c2c2e;
+    --text-primary: #f5f5f7;
+    --text-secondary: rgba(255,255,255,.65);
+    --hover-bg: rgba(255,255,255,.08);
+    --active-bg: rgba(255,255,255,.14);
+    --border: rgba(255,255,255,.09);
+    --accent: #0a84ff;
+    --menubar-bg: rgba(18,18,20,.62);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;
+    color:var(--text-primary);
+    overflow:hidden;
+    user-select:none;
+  }
+  textarea, input, .selectable{ user-select:text; }
+  body.dragging, body.dragging *{ cursor:grabbing !important; user-select:none !important; }
+
+  #desktop{
+    background:
+      radial-gradient(circle at 15% 20%, rgba(56,189,248,.32), transparent 50%),
+      radial-gradient(circle at 85% 15%, rgba(244,114,182,.26), transparent 45%),
+      radial-gradient(circle at 50% 92%, rgba(129,140,248,.30), transparent 55%),
+      linear-gradient(160deg,#1e1b4b 0%,#312e81 35%,#1e3a5f 70%,#0c4a6e 100%);
+  }
+  #flash-overlay{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:9999; }
+  #flash-overlay.flash{ animation: flashAnim .35s ease-out; }
+  @keyframes flashAnim{ 0%{opacity:0;} 25%{opacity:.55;} 100%{opacity:0;} }
+
+  .desktop-icon{ width:84px; }
+  .desktop-icon .icon-box{ width:44px; height:44px; margin:0 auto; }
+  .desktop-icon span.label{ color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.85); font-size:12px; line-height:1.2; }
+  .desktop-icon.selected .icon-box{ background:rgba(10,132,255,.35); border-radius:4px; outline:1px solid rgba(255,255,255,.5); }
+  .desktop-icon.selected span.label{ background:rgba(0,90,180,.85); border-radius:2px; text-shadow:none; }
+
+  .win-window{
+    background:var(--acrylic-bg);
+    border:1px solid var(--acrylic-border);
+    backdrop-filter: blur(28px) saturate(1.6);
+    -webkit-backdrop-filter: blur(28px) saturate(1.6);
+    transition: opacity .2s ease-out, transform .2s ease-out, left .2s ease-out, top .2s ease-out, width .2s ease-out, height .2s ease-out;
+    display:flex; border-radius:10px;
+  }
+  .win-window.opening{ opacity:0; transform:scale(.94); }
+  .win-window.closing{ opacity:0; transform:scale(.92); }
+  .win-window.minimizing{ opacity:0; transform:scale(.6) translateY(45vh); }
+  .win-window.inactive .titlebar{ opacity:.7; }
+  .win-window.inactive{ box-shadow:0 8px 24px rgba(0,0,0,.25); }
+  .win-window:not(.inactive){ box-shadow:0 16px 48px rgba(0,0,0,.4); }
+
+  .titlebar{ background:var(--titlebar-bg); border-bottom:1px solid var(--border); position:relative; }
+  .tl-dot{ width:12px; height:12px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; line-height:1; color:rgba(0,0,0,0); }
+  .tl-close{ background:#ff5f57; }
+  .tl-min{ background:#febc2e; }
+  .tl-max{ background:#28c840; }
+  .titlebar:hover .tl-dot{ color:rgba(0,0,0,.5); }
+  .win-content{ background:var(--surface); color:var(--text-primary); }
+
+  .resize-grip{ position:absolute; right:0; bottom:0; width:14px; height:14px; cursor:nwse-resize; }
+
+  #menubar{ background:var(--menubar-bg); backdrop-filter:blur(24px) saturate(1.6); -webkit-backdrop-filter:blur(24px) saturate(1.6); border-bottom:1px solid var(--border); color:var(--text-primary); }
+  .mb-item{ font-size:12.5px; opacity:.85; }
+  .mb-icon-btn{ width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--text-primary); }
+  .mb-icon-btn:hover{ background:var(--hover-bg); }
+
+  #dock-wrap{ }
+  #dock{ background:var(--acrylic-bg); border:1px solid var(--acrylic-border); backdrop-filter:blur(26px) saturate(1.7); -webkit-backdrop-filter:blur(26px) saturate(1.7); box-shadow:0 12px 40px rgba(0,0,0,.35); }
+  .dock-icon-btn{ width:44px; height:44px; display:flex; align-items:center; justify-content:center; position:relative; transition:transform .12s ease-out; }
+  .dock-icon-btn:hover{ transform:translateY(-6px) scale(1.12); }
+  .dock-icon-btn .run-dot{ position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); width:5px; height:5px; border-radius:50%; background:var(--text-primary); opacity:0; }
+  .dock-icon-btn.running .run-dot{ opacity:.6; }
+  .dock-divider{ width:1px; align-self:stretch; margin:4px 5px; background:var(--border); }
+
+  .panel{ background:var(--acrylic-bg); border:1px solid var(--acrylic-border); backdrop-filter:blur(28px) saturate(1.6); -webkit-backdrop-filter:blur(28px) saturate(1.6); color:var(--text-primary); }
+  .menu-item-btn{ width:100%; display:flex; align-items:center; justify-content:space-between; padding:6px 12px; font-size:13px; border-radius:4px; }
+  .menu-item-btn:hover{ background:var(--hover-bg); }
+  .submenu{ min-width:170px; }
+
+  input.switch{ appearance:none; width:38px; height:20px; border-radius:999px; background:#8a8a8a; position:relative; cursor:pointer; outline:none; flex-shrink:0; }
+  input.switch:checked{ background:var(--accent); }
+  input.switch::after{ content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .15s ease-out; }
+  input.switch:checked::after{ left:20px; }
+
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(128,128,128,.5); border-radius:6px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+
+  #snap-overlay{ position:fixed; background:var(--accent); opacity:.32; border-radius:10px; border:2px solid var(--accent); z-index:9998; pointer-events:none; }
+
+  .cmd-window .win-content{ background:#000; color:#f2f2f2; font-family:"Cascadia Mono","Consolas",monospace; font-size:13px; }
+  .cmd-window .win-content input{ background:transparent; color:#f2f2f2; outline:none; border:none; font-family:inherit; font-size:inherit; }
+
+  .ripple{ position:absolute; border-radius:50%; background:rgba(255,255,255,.5); transform:scale(0); animation:rippleAnim .5s ease-out; pointer-events:none; }
+  @keyframes rippleAnim{ to{ transform:scale(2.6); opacity:0; } }
+
+  /* ---- AI workspace assistant ---- */
+  #ambient-layer{ position:absolute; inset:0; opacity:0; transition:opacity .7s ease; pointer-events:none; }
+  .ai-panel{
+    background: linear-gradient(180deg, rgba(22,22,32,.86), rgba(14,14,22,.88));
+    border:1px solid rgba(255,255,255,.12);
+    backdrop-filter: blur(30px) saturate(1.8);
+    -webkit-backdrop-filter: blur(30px) saturate(1.8);
+    color:#f2f2f7;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset;
+  }
+  #ai-bar{ opacity:0; transform:translateX(-50%) translateY(-8px); transition:opacity .22s ease-out, transform .22s ease-out; }
+  #ai-bar.ai-open{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .ai-orb{ width:9px; height:9px; border-radius:50%; background:radial-gradient(circle,#93c5fd,#6366f1); box-shadow:0 0 10px 2px rgba(99,102,241,.7); animation:aiOrbPulse 1.7s ease-in-out infinite; flex-shrink:0; }
+  .ai-orb.busy{ animation-duration:.6s; }
+  @keyframes aiOrbPulse{ 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.35); opacity:.65; } }
+  .ai-preset{ display:flex; align-items:center; gap:5px; font-size:11px; padding:5px 10px; border-radius:999px; background:rgba(255,255,255,.06); color:#e5e7eb; border:1px solid rgba(255,255,255,.08); }
+  .ai-preset:hover{ background:rgba(255,255,255,.14); }
+  .ai-log-line{ display:flex; align-items:center; gap:7px; opacity:0; animation: aiLogIn .3s ease-out forwards; }
+  @keyframes aiLogIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:translateY(0); } }
+  .ai-log-dot{ width:6px; height:6px; border-radius:50%; background:#34d399; box-shadow:0 0 6px #34d399; flex-shrink:0; }
+
+  .ai-menubar-btn{ color:var(--accent); }
+  .ai-menubar-btn span{ animation: aiIconPulse 2.6s ease-in-out infinite; }
+  @keyframes aiIconPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
+
+  .ai-dim{ opacity:.28 !important; filter:grayscale(70%); transition:opacity .5s ease, filter .5s ease; pointer-events:none; }
+  #dock.ai-no-badges .run-dot{ display:none !important; }
+
+  .win-window.ai-move{
+    transition: opacity .2s ease-out, transform .2s ease-out,
+      left .55s cubic-bezier(.4,0,.2,1), top .55s cubic-bezier(.4,0,.2,1),
+      width .55s cubic-bezier(.4,0,.2,1), height .55s cubic-bezier(.4,0,.2,1);
+  }
+
+  /* ---- Explainer speech bubbles ----
+     .bubble-wrap is any anchor (position:relative only — it deliberately does NOT
+     set display, so it can be dropped onto elements that already have their own
+     Tailwind layout classes, like desktop icons, without fighting them).
+     Each bubble picks ONE placement class. "-start"/"-end" variants anchor to the
+     trigger's left/right edge instead of centering, so tooltips near a screen edge
+     grow inward instead of clipping off-screen. */
+  .bubble-wrap{ position:relative; }
+  .bubble{
+    position:absolute; width:190px; max-width:calc(100vw - 24px); padding:8px 10px; border-radius:10px; font-size:11px; line-height:1.45;
+    background:rgba(17,17,26,.97); color:#e5e7eb; border:1px solid rgba(255,255,255,.14);
+    opacity:0; pointer-events:none; transition:opacity .15s ease, transform .15s ease; z-index:10060;
+    box-shadow:0 12px 30px rgba(0,0,0,.5);
+  }
+  .bubble-wrap:hover .bubble{ opacity:1; }
+  .bubble::after{ content:''; position:absolute; border:5px solid transparent; }
+
+  .bubble-top{ bottom:100%; left:50%; margin-bottom:9px; transform:translateX(-50%) translateY(4px); }
+  .bubble-wrap:hover .bubble-top{ transform:translateX(-50%) translateY(0); }
+  .bubble-top::after{ top:100%; left:50%; transform:translateX(-50%); border-top-color:rgba(17,17,26,.97); }
+
+  .bubble-top-start{ bottom:100%; left:0; margin-bottom:9px; transform:translateY(4px); }
+  .bubble-wrap:hover .bubble-top-start{ transform:translateY(0); }
+  .bubble-top-start::after{ top:100%; left:14px; border-top-color:rgba(17,17,26,.97); }
+
+  .bubble-bottom{ top:100%; left:50%; margin-top:9px; transform:translateX(-50%) translateY(-4px); }
+  .bubble-wrap:hover .bubble-bottom{ transform:translateX(-50%) translateY(0); }
+  .bubble-bottom::after{ bottom:100%; left:50%; transform:translateX(-50%); border-bottom-color:rgba(17,17,26,.97); }
+
+  .bubble-bottom-start{ top:100%; left:0; margin-top:9px; transform:translateY(-4px); }
+  .bubble-wrap:hover .bubble-bottom-start{ transform:translateY(0); }
+  .bubble-bottom-start::after{ bottom:100%; left:14px; border-bottom-color:rgba(17,17,26,.97); }
+
+  .bubble-bottom-end{ top:100%; left:auto; right:0; margin-top:9px; transform:translateY(-4px); }
+  .bubble-wrap:hover .bubble-bottom-end{ transform:translateY(0); }
+  .bubble-bottom-end::after{ bottom:100%; left:auto; right:14px; border-bottom-color:rgba(17,17,26,.97); }
+
+  /* ---- Simulated voice command ---- */
+  .ai-mic-btn{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#9ca3af; flex-shrink:0; }
+  .ai-mic-btn:hover{ background:rgba(255,255,255,.08); color:#f2f2f7; }
+  .ai-mic-btn.listening{ color:#fff; background:#ef4444; animation:aiMicPulse 1s ease-in-out infinite; }
+  @keyframes aiMicPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(239,68,68,.55); } 50%{ box-shadow:0 0 0 8px rgba(239,68,68,0); } }
+  .listening-dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:#ef4444; box-shadow:0 0 6px #ef4444; animation:aiMicPulse 1s ease-in-out infinite; margin-right:4px; }
+  .voice-suggestion{ text-align:left; width:100%; padding:5px 8px; border-radius:7px; font-size:11px; color:#e5e7eb; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); }
+  .voice-suggestion:hover{ background:rgba(255,255,255,.12); }
+  .voice-group-label{ font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:#7d8590; margin:8px 0 3px; }
+  .voice-group-label:first-child{ margin-top:0; }
+
+  #back-launcher{ position:fixed; top:34px; right:10px; z-index:10060; font-size:11px; padding:5px 11px; border-radius:999px; color:#fff; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.18); backdrop-filter:blur(10px); opacity:.5; transition:opacity .15s ease; text-decoration:none; }
+  #back-launcher:hover{ opacity:1; }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body class="h-screen w-screen">
+
+  <a id="back-launcher" href="index.html">&#8249; LivingOS</a>
+
+  <div id="desktop" class="absolute inset-0" oncontextmenu="return false;">
+    <div id="ambient-layer"></div>
+    <div id="desktop-icons" class="absolute top-8 right-2 grid grid-flow-col gap-1" style="grid-template-rows:repeat(6,88px); justify-items:end;"></div>
+    <div id="flash-overlay"></div>
+  </div>
+
+  <div id="windows-layer" class="absolute inset-0" style="pointer-events:none;"></div>
+
+  <div id="snap-overlay" class="hidden"></div>
+
+  <!-- Desktop context menu -->
+  <div id="context-menu" class="hidden panel fixed rounded-xl p-1.5 w-56 shadow-2xl z-[9997]"></div>
+
+  <!-- Spotlight search -->
+  <div id="spotlight" class="hidden panel fixed rounded-2xl shadow-2xl z-[9996]" style="width:560px; top:110px; left:50%; transform:translateX(-50%);"></div>
+
+  <!-- Menu bar tray popups -->
+  <div id="tray-popup" class="hidden panel fixed rounded-xl shadow-2xl z-[9996] p-4" style="width:300px; top:34px; right:8px;"></div>
+
+  <!-- AI workspace assistant overlay -->
+  <div id="ai-bar" class="hidden fixed z-[10050]" style="top:36px; left:50%; width:600px;"></div>
+
+  <!-- Menu bar -->
+  <div id="menubar" class="fixed top-0 left-0 right-0 h-7 flex items-center justify-between px-3 z-[9995]">
+    <div class="flex items-center gap-4">
+      <span id="apple-logo" class="w-4 h-4 block"></span>
+      <span id="menubar-appname" class="mb-item font-semibold">Finder</span>
+      <span class="mb-item hidden sm:inline">File</span>
+      <span class="mb-item hidden sm:inline">Edit</span>
+      <span class="mb-item hidden sm:inline">View</span>
+      <span class="mb-item hidden sm:inline">Window</span>
+      <span class="mb-item hidden sm:inline">Help</span>
+    </div>
+    <div id="menubar-tray" class="flex items-center gap-1"></div>
+  </div>
+
+  <!-- Dock -->
+  <div id="dock-wrap" class="fixed bottom-2 left-1/2 z-[9995]" style="transform:translateX(-50%);">
+    <div id="dock" class="flex items-end gap-1 px-2.5 py-2 rounded-2xl"></div>
+  </div>
+
+<script>
+/*
+ * LivingOS — macOS environment
+ * ------------------------------------------------------------------
+ * Structurally identical to windows.html (same state/window-manager/
+ * AI-assistant patterns) with mac-specific chrome swapped in: a top
+ * menu bar instead of a taskbar, a Dock instead of pinned taskbar
+ * icons, Spotlight instead of the Start Menu, and traffic-light window
+ * controls instead of Windows-style min/max/close buttons.
+ * The "AI" layer (search for AI WORKSPACE ASSISTANT below) is a scripted
+ * sequence of DOM changes with timed delays, not a call to any real model —
+ * it exists to demonstrate what an AI-driven layout engine *could* do.
+ */
+/* ============================= ICONS ============================= */
+// Inline SVG strings so every icon ships inside this one file — no icon
+// font, no external requests, no CDN besides Tailwind's utility CSS.
+const ICONS = {
+  pc: `<svg viewBox="0 0 24 24" fill="none" stroke="#4a90e2" stroke-width="1.6"><rect x="2.5" y="4" width="19" height="12" rx="1.2"/><path d="M8 20h8M12 16v4" stroke-linecap="round"/></svg>`,
+  recycle: `<svg viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.6"><path d="M6 7h12l-1 13.5a1.5 1.5 0 0 1-1.5 1.5h-7a1.5 1.5 0 0 1-1.5-1.5L6 7Z"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7M4 7h16" stroke-linecap="round"/><path d="M10 10.5v7M14 10.5v7" stroke-linecap="round"/></svg>`,
+  notepad: `<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2.5" width="16" height="19" rx="1.5" fill="#e8f1fb" stroke="#3b82c4" stroke-width="1.2"/><rect x="4" y="2.5" width="16" height="19" rx="1.5" fill="none" stroke="#3b82c4" stroke-width="1.2"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#3b82c4" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+  edge: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#0ea5e9"/><path d="M12 2a10 10 0 0 0-9 14.3C4.5 12 9 8.5 14 9.5c-3.5 0-6 2-6 5 0 3 2.7 5 6 5a9.8 9.8 0 0 0 6.5-2.5A10 10 0 0 0 12 2Z" fill="#22d3ee"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.3 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.7 7.7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7.6 7.6 0 0 0 1.7 1l.3 2.6h4l.3-2.6a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5Z"/></svg>`,
+  cmd: `<svg viewBox="0 0 24 24"><rect x="2.5" y="3" width="19" height="18" rx="2" fill="#0c0c0c"/><path d="M6 9l3.5 3L6 15" stroke="#f2f2f2" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15h6" stroke="#f2f2f2" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  textfile: `<svg viewBox="0 0 24 24" fill="none"><path d="M6 2.5h9l3.5 3.5V21a.5.5 0 0 1-.5.5h-12A.5.5 0 0 1 5.5 21V3a.5.5 0 0 1 .5-.5Z" fill="#fafafa" stroke="#9ca3af" stroke-width="1"/><path d="M15 2.5V6h3.5" fill="none" stroke="#9ca3af" stroke-width="1"/><path d="M8 11h8M8 14h8M8 17h5" stroke="#6b7280" stroke-width="1" stroke-linecap="round"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8" stroke-linecap="round"/></svg>`,
+  wifi: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8.5a15 15 0 0 1 20 0"/><path d="M5.5 12.3a10 10 0 0 1 13 0"/><path d="M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19.3" r="1" fill="currentColor" stroke="none"/></svg>`,
+  volume: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3 9.5h4L12 5v14l-5-4.5H3z"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6"/><path d="M19 6.5a8.5 8.5 0 0 1 0 11"/></svg>`,
+  battery: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4" stroke-linecap="round"/><rect x="4" y="9" width="12" height="6" fill="currentColor" stroke="none" opacity=".7"/></svg>`,
+  restore: `<svg viewBox="0 0 12 12"><rect x="3" y="1.5" width="7.5" height="7.5" fill="none" stroke="currentColor"/><path d="M1.5 3.5H8v7.5H1.5z" fill="var(--surface)" stroke="currentColor"/></svg>`,
+  back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`,
+  forward: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>`,
+  refresh: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>`,
+  ai: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 2l1.8 5.6L19.4 9.4 13.8 11.2 12 17l-1.8-5.8L4.6 9.4l5.6-1.8L12 2Z" fill="currentColor"/><circle cx="19" cy="5" r="1.3" fill="currentColor"/><circle cx="5" cy="18" r="1.1" fill="currentColor"/></svg>`,
+  focus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke-linecap="round"/></svg>`,
+  code: `<svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L3 12l5 6M16 6l5 6-5 6M13.5 4l-3 16"/></svg>`,
+  palette: `<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.8-1.9 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-3.9-4-6.9-9-6.9Z" fill="#fb923c"/><circle cx="7.5" cy="10.5" r="1.3" fill="#22c55e"/><circle cx="9.5" cy="7" r="1.3" fill="#ef4444"/><circle cx="14" cy="6.5" r="1.3" fill="#3b82f6"/><circle cx="17" cy="10" r="1.3" fill="#eab308"/></svg>`,
+  music: `<svg viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="#f472b6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="#f472b6"/><circle cx="17.5" cy="16" r="2.5" fill="#f472b6"/></svg>`,
+  brush: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l5 5-9.5 9.5a2 2 0 0 1-1.2.6l-3.6.4.4-3.6a2 2 0 0 1 .6-1.2L15 4Z"/><path d="M13.5 5.5l5 5"/></svg>`,
+  eraser: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13l-7 7H6l-3-3 10-10 8 8-3 3"/><path d="M9 20h11"/></svg>`,
+  mic: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3M9 21h6"/></svg>`,
+  info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5" stroke-linecap="round"/><circle cx="12" cy="8" r=".9" fill="currentColor" stroke="none"/></svg>`,
+  apple: `<svg viewBox="0 0 24 24"><path d="M16.7 12.9c0-2.7 2.2-4 2.3-4.1-1.3-1.9-3.3-2.1-4-2.2-1.7-.2-3.3 1-4.2 1-.8 0-2.2-1-3.6-1-1.8 0-3.5 1.1-4.5 2.7-1.9 3.3-.5 8.2 1.4 10.9.9 1.3 2 2.8 3.4 2.7 1.4-.1 1.9-.9 3.6-.9 1.7 0 2.1.9 3.6.9 1.5 0 2.5-1.3 3.4-2.7.6-.9 1-1.7 1.3-2.5-3.3-1.3-3.7-4.7-3.7-4.8Z" fill="currentColor"/><path d="M14 3.9c.7-.9 1.2-2.1 1-3.3-1.1.1-2.4.8-3.1 1.6-.7.8-1.3 2-1.1 3.2 1.2.1 2.5-.6 3.2-1.5Z" fill="currentColor"/></svg>`,
+};
+
+/* ============================= STATE =============================
+   Persisted under localStorage keys prefixed "mac-" so this demo never
+   collides with the Windows demo's "w11-" keys, even though both files
+   can be opened from the same origin. */
+let state = {
+  theme: localStorage.getItem('mac-theme') || 'light',
+  files: JSON.parse(localStorage.getItem('mac-files') || '{"Welcome.txt":"Welcome to the LivingOS macOS environment!"}'),
+  desktopIcons: JSON.parse(localStorage.getItem('mac-desktop-icons') || 'null') || [
+    { id:'finder', name:'Finder', app:'explorer', icon:'pc', fixed:true },
+    { id:'textedit', name:'TextEdit', app:'notepad', icon:'notepad', fixed:true },
+    { id:'safari', name:'Safari', app:'browser', icon:'edge', fixed:true },
+    { id:'settings', name:'System Settings', app:'settings', icon:'settings', fixed:true },
+    { id:'terminal', name:'Terminal', app:'cmd', icon:'cmd', fixed:true },
+    { id:'trash', name:'Trash', app:'recyclebin', icon:'recycle', fixed:true },
+  ],
+};
+function saveFiles(){ localStorage.setItem('mac-files', JSON.stringify(state.files)); }
+function saveDesktopIcons(){ localStorage.setItem('mac-desktop-icons', JSON.stringify(state.desktopIcons)); }
+
+const PINNED_APPS = ['explorer','browser','notepad','cmd','settings'];
+
+const windows = {};      // id -> window record
+const openWindows = {};  // appType -> id  (single instance per app)
+let zTop = 10;
+let activeId = null;
+let winCounter = 0;
+let selectedIconId = null;
+let pendingSnap = null;
+
+/* ============================= HELPERS ============================= */
+function $(sel, root=document){ return root.querySelector(sel); }
+
+// Per-mode wallpaper gradient + accent color. #ambient-layer is a dedicated
+// full-screen div that sits between the wallpaper and the desktop icons
+// (see #desktop in the HTML) purely so its opacity can crossfade — animating
+// a `background` property directly does not transition smoothly in CSS.
+const AMBIENT = {
+  focus:    { bg: 'linear-gradient(160deg,#050b17 0%,#0b1a33 40%,#122845 75%,#0a1626 100%)', accent:'#3b82f6' },
+  creative: { bg: 'linear-gradient(135deg,#3b0a02 0%,#7c2d12 30%,#c2410c 60%,#f59e0b 100%)', accent:'#f59e0b' },
+  relax:    { bg: 'linear-gradient(160deg,#2a1533 0%,#5b2a52 35%,#b45f45 70%,#e8a15c 100%)', accent:'#e8a15c' },
+};
+let currentMode = 'default';
+// The accent override is set as an inline style on <html>, which beats the
+// --accent defined in the :root/.dark stylesheet rules by specificity;
+// removing the inline property (mode === 'default') lets the normal
+// light/dark theme accent show through again.
+function applyAccentForMode(){
+  const cfg = currentMode === 'default' ? null : AMBIENT[currentMode];
+  if (cfg) document.documentElement.style.setProperty('--accent', cfg.accent);
+  else document.documentElement.style.removeProperty('--accent');
+}
+function setAmbient(mode){
+  currentMode = mode;
+  document.documentElement.classList.remove('mode-focus', 'mode-creative', 'mode-relax');
+  const layer = $('#ambient-layer');
+  if (mode === 'default'){
+    layer.style.opacity = 0;
+  } else {
+    document.documentElement.classList.add('mode-' + mode);
+    layer.style.background = AMBIENT[mode].bg;
+    layer.style.opacity = 1;
+  }
+  applyAccentForMode();
+}
+
+function setTheme(mode){
+  state.theme = mode;
+  document.documentElement.classList.toggle('dark', mode === 'dark');
+  localStorage.setItem('mac-theme', mode);
+  document.querySelectorAll('.theme-toggle').forEach(t => t.checked = mode === 'dark');
+  applyAccentForMode();
+}
+document.addEventListener('change', e => {
+  if (e.target.classList && e.target.classList.contains('theme-toggle')) {
+    setTheme(e.target.checked ? 'dark' : 'light');
+  }
+});
+
+/* ============================= DESKTOP ICONS ============================= */
+// Tells a first-time visitor, up front, whether an app is a working simulation
+// or just a static placeholder — shown as a hover bubble on each desktop icon.
+const APP_INFO = {
+  explorer: 'Placeholder — shows static drive/folder tiles you can hover but not actually browse into.',
+  recyclebin: 'Placeholder — always shows an empty Trash. There is no real delete/restore flow.',
+  notepad: 'Fully functional — type freely, then use File → Save/Open to persist text (saved to your browser’s local storage, not a real disk).',
+  browser: 'Partly functional — the address bar, mock search, and back/forward history all work; results are fabricated, not real internet access.',
+  settings: 'Fully functional — page navigation and the Dark Mode toggle (under Appearance) really work. Bluetooth/network/device specs are static placeholders.',
+  cmd: 'Fully functional mini terminal — try help, dir, date, time, cls, or echo. Only those commands exist.',
+  codeeditor: 'Fully functional text editor with live line numbers — content is kept only while the window is open (not saved to disk).',
+  design: 'Fully functional — draw on the canvas with the brush/eraser tools and color palette.',
+  media: 'Simulated — play/pause and the progress bar work on a timer; there is no real audio file.',
+};
+function renderDesktopIcons(){
+  const box = $('#desktop-icons');
+  box.innerHTML = '';
+  state.desktopIcons.forEach(ic => {
+    const info = ic.fixed ? APP_INFO[ic.app] : null;
+    const el = document.createElement('div');
+    el.className = 'desktop-icon flex flex-col items-center gap-1 py-2 rounded cursor-default' + (info ? ' bubble-wrap' : '') + (selectedIconId === ic.id ? ' selected' : '');
+    el.dataset.id = ic.id;
+    el.innerHTML = `<div class="icon-box">${ICONS[ic.icon]}</div><span class="label text-center px-1">${ic.name}</span>`
+      + (info ? `<div class="bubble bubble-bottom-end">${info}</div>` : '');
+    el.addEventListener('click', e => { e.stopPropagation(); selectedIconId = ic.id; renderDesktopIcons(); });
+    el.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      if (ic.type === 'file') openApp('notepad', { file: ic.name });
+      else openApp(ic.app);
+    });
+    box.appendChild(el);
+  });
+}
+
+let newDocCounter = 1;
+function createNewTextDocument(){
+  const name = newDocCounter === 1 ? 'New Text File.txt' : `New Text File (${newDocCounter}).txt`;
+  newDocCounter++;
+  state.desktopIcons.push({ id:'doc-' + Date.now(), name, icon:'textfile', type:'file' });
+  if (!(name in state.files)) state.files[name] = '';
+  saveFiles(); saveDesktopIcons();
+  renderDesktopIcons();
+}
+
+function triggerFlash(){
+  const el = $('#flash-overlay');
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+/* ============================= CONTEXT MENU ============================= */
+function menuItem({label, action, submenu}){
+  const wrap = document.createElement('div');
+  wrap.className = 'menu-item group relative';
+  const btn = document.createElement('button');
+  btn.className = 'menu-item-btn';
+  btn.innerHTML = `<span>${label}</span>${submenu ? '<span class="text-xs opacity-60">›</span>' : ''}`;
+  if (action) btn.onclick = (e) => { e.stopPropagation(); action(); closeContextMenu(); };
+  wrap.appendChild(btn);
+  if (submenu){
+    const sub = document.createElement('div');
+    sub.className = 'submenu hidden group-hover:flex flex-col panel absolute left-full top-0 rounded-xl p-1.5 shadow-2xl';
+    submenu.forEach(it => sub.appendChild(menuItem(it)));
+    wrap.appendChild(sub);
+  }
+  return wrap;
+}
+function openContextMenu(x, y){
+  const menu = $('#context-menu');
+  menu.innerHTML = '';
+  const items = [
+    { label:'View', submenu:[{label:'Icon size: Large'},{label:'Icon size: Medium'},{label:'Icon size: Small'}] },
+    { label:'Sort By', submenu:[{label:'Name'},{label:'Kind'},{label:'Date Modified'}] },
+    { label:'Clean Up', action: triggerFlash },
+    { label:'New', submenu:[{label:'New Folder'},{label:'New Text File', action:createNewTextDocument}] },
+    { label:'Change Desktop Background…', action: () => openApp('settings', { page:'personalization' }) },
+  ];
+  items.forEach(it => menu.appendChild(menuItem(it)));
+  menu.classList.remove('hidden');
+  const mw = 224, mh = menu.offsetHeight || 260;
+  menu.style.left = Math.min(x, window.innerWidth - mw - 8) + 'px';
+  menu.style.top = Math.min(y, window.innerHeight - mh - 8) + 'px';
+}
+function closeContextMenu(){ $('#context-menu').classList.add('hidden'); }
+
+$('#desktop').addEventListener('contextmenu', e => {
+  e.preventDefault();
+  openContextMenu(e.clientX, e.clientY);
+});
+$('#desktop').addEventListener('click', () => { selectedIconId = null; renderDesktopIcons(); closeContextMenu(); closeSpotlight(); closeTrayPopup(); closeAIBar(); });
+
+/* ============================= WINDOW MANAGER =============================
+   Everything here is app-agnostic: it only touches the `windows` bookkeeping
+   dict and each window's DOM element. Individual apps (see APP_DEFS below)
+   never see or need to know how dragging, snapping, or focus work. This is
+   the same engine as windows.html, just with chromeTop/dockH swapped in for
+   the taskbar's fixed 48px band, since the menu bar and Dock occupy
+   different, independently-sized strips of screen. */
+
+// Keeps at least `minVisible` px of the window on-screen so it can never be
+// dragged somewhere the user can't get it back (fully off-screen), and never
+// under the menu bar or Dock.
+function clampWindow(w){
+  const chromeTop = 28, dockH = 74, minVisible = 100;
+  w.x = Math.min(Math.max(w.x, -(w.width - minVisible)), window.innerWidth - minVisible);
+  w.y = Math.min(Math.max(w.y, chromeTop), window.innerHeight - dockH - 36);
+}
+function applyBounds(id){
+  const w = windows[id];
+  w.el.style.left = w.x + 'px';
+  w.el.style.top = w.y + 'px';
+  w.el.style.width = w.width + 'px';
+  w.el.style.height = w.height + 'px';
+  w.el.style.borderRadius = w.maximized ? '0px' : '10px';
+}
+
+// Each appType only ever has one live window (openWindows maps appType -> id).
+// Re-invoking openApp on a running app just restores/focuses it instead of
+// spawning a second instance — simpler bookkeeping, and it mirrors how a
+// real Dock click on a running app brings it forward rather than duplicating it.
+function openApp(appType, opts){
+  if (openWindows[appType]){
+    const id = openWindows[appType];
+    const w = windows[id];
+    if (w.minimized) restoreWindow(id);
+    focusWindow(id);
+    if (APP_DEFS[appType].onReopen) APP_DEFS[appType].onReopen(id, opts || {});
+    return;
+  }
+  const def = APP_DEFS[appType];
+  const id = 'w' + (++winCounter);
+  const count = Object.keys(windows).length;
+  const width = def.width || 640, height = def.height || 440;
+  const x = 130 + (count % 5) * 34, y = 66 + (count % 5) * 30;
+
+  const el = document.createElement('div');
+  el.className = 'win-window absolute overflow-hidden flex flex-col opening' + (appType === 'cmd' ? ' cmd-window' : '');
+  el.style.cssText = `left:${x}px; top:${y}px; width:${width}px; height:${height}px; z-index:${++zTop}; pointer-events:auto;`;
+  el.innerHTML = `
+    <div class="titlebar flex items-center h-9 shrink-0" data-role="titlebar">
+      <div class="flex items-center gap-2 pl-3.5" data-role="traffic">
+        <button class="tl-dot tl-close" data-act="close" title="Close"><span>&#215;</span></button>
+        <button class="tl-dot tl-min" data-act="min" title="Minimize"><span>&#8722;</span></button>
+        <button class="tl-dot tl-max" data-act="max" title="Zoom"><span>&#43;</span></button>
+      </div>
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span class="text-xs font-medium title-text truncate" style="max-width:55%;">${def.title}</span>
+      </div>
+    </div>
+    <div class="win-content flex-1 overflow-auto flex flex-col"></div>
+  `;
+  $('#windows-layer').appendChild(el);
+
+  windows[id] = { id, appType, el, x, y, width, height, minimized:false, maximized:false, snapped:null, prevBounds:null, zIndex:zTop, api:null };
+  openWindows[appType] = id;
+
+  windows[id].api = def.render(el.querySelector('.win-content'), id, opts || {}) || null;
+  bindWindowEvents(id);
+  requestAnimationFrame(() => el.classList.remove('opening'));
+  focusWindow(id);
+  renderDock();
+}
+
+function bindWindowEvents(id){
+  const w = windows[id];
+  const titlebar = w.el.querySelector('[data-role="titlebar"]');
+  titlebar.addEventListener('mousedown', e => {
+    e.preventDefault();
+    focusWindow(id);
+    if (e.target.closest('.tl-dot')) return;
+    startDrag(id, e);
+  });
+  titlebar.addEventListener('dblclick', e => { if (!e.target.closest('.tl-dot')) toggleMaximize(id); });
+  w.el.addEventListener('mousedown', () => focusWindow(id));
+  w.el.querySelector('[data-act="min"]').onclick = () => minimizeWindow(id);
+  w.el.querySelector('[data-act="max"]').onclick = () => toggleMaximize(id);
+  w.el.querySelector('[data-act="close"]').onclick = () => closeWindow(id);
+
+  const grip = document.createElement('div');
+  grip.className = 'resize-grip';
+  w.el.appendChild(grip);
+  grip.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); startResize(id, e); });
+}
+
+// Grabbing a maximized ("zoomed") or edge-snapped window "un-does" that
+// state first, restoring its pre-snap size and re-centering it under the
+// cursor, so the drag feels like picking the window back up rather than
+// jumping oddly.
+function startDrag(id, e){
+  const w = windows[id];
+  if (w.maximized){
+    const ratio = (e.clientX - w.x) / w.width;
+    const prev = w.prevBounds || { x:120, y:70, width:640, height:440 };
+    w.maximized = false;
+    w.width = prev.width; w.height = prev.height;
+    w.x = e.clientX - prev.width * Math.min(Math.max(ratio,0),1);
+    w.y = Math.max(28, e.clientY - 18);
+    applyBounds(id);
+  } else if (w.snapped){
+    const prev = w.prevBounds || { x:120, y:70, width:640, height:440 };
+    w.snapped = null;
+    w.width = prev.width; w.height = prev.height;
+    w.x = e.clientX - prev.width * 0.5;
+    w.y = Math.max(28, e.clientY - 18);
+    applyBounds(id);
+  } else {
+    w.prevBounds = { x:w.x, y:w.y, width:w.width, height:w.height };
+  }
+
+  document.body.classList.add('dragging');
+  w.el.style.transition = 'none';
+  const offsetX = e.clientX - w.x;
+  const offsetY = e.clientY - w.y;
+
+  function onMove(ev){
+    w.x = ev.clientX - offsetX;
+    w.y = ev.clientY - offsetY;
+    clampWindow(w);
+    applyBounds(id);
+    checkSnapZones(ev);
+  }
+  function onUp(ev){
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.classList.remove('dragging');
+    w.el.style.transition = '';
+    finalizeSnap(id);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// Dragging within `edge` px of the top/left/right of the usable area (below
+// the menu bar) previews a snap zone. The actual snap only happens in
+// finalizeSnap() on mouseup, so users can back out mid-drag.
+function checkSnapZones(ev){
+  const edge = 4, top = 28, ov = $('#snap-overlay');
+  if (ev.clientY <= edge + top){
+    pendingSnap = 'max';
+    ov.style.left='0'; ov.style.top=top+'px'; ov.style.width=window.innerWidth+'px'; ov.style.height=(window.innerHeight-top-74)+'px';
+    ov.classList.remove('hidden');
+  } else if (ev.clientX <= edge){
+    pendingSnap = 'left';
+    ov.style.left='0'; ov.style.top=top+'px'; ov.style.width=(window.innerWidth/2)+'px'; ov.style.height=(window.innerHeight-top-74)+'px';
+    ov.classList.remove('hidden');
+  } else if (ev.clientX >= window.innerWidth - edge){
+    pendingSnap = 'right';
+    ov.style.left=(window.innerWidth/2)+'px'; ov.style.top=top+'px'; ov.style.width=(window.innerWidth/2)+'px'; ov.style.height=(window.innerHeight-top-74)+'px';
+    ov.classList.remove('hidden');
+  } else {
+    pendingSnap = null;
+    ov.classList.add('hidden');
+  }
+}
+function finalizeSnap(id){
+  const w = windows[id];
+  $('#snap-overlay').classList.add('hidden');
+  const top = 28, dockH = 74;
+  if (pendingSnap === 'left'){
+    w.x = 0; w.y = top; w.width = window.innerWidth/2; w.height = window.innerHeight-top-dockH; w.snapped='left';
+    applyBounds(id);
+  } else if (pendingSnap === 'right'){
+    w.x = window.innerWidth/2; w.y = top; w.width = window.innerWidth/2; w.height = window.innerHeight-top-dockH; w.snapped='right';
+    applyBounds(id);
+  } else if (pendingSnap === 'max'){
+    toggleMaximize(id, true);
+  }
+  pendingSnap = null;
+}
+
+function startResize(id, e){
+  const w = windows[id];
+  w.el.style.transition = 'none';
+  const startX = e.clientX, startY = e.clientY, startW = w.width, startH = w.height;
+  function onMove(ev){
+    w.width = Math.max(340, Math.min(startW + (ev.clientX-startX), window.innerWidth - w.x));
+    w.height = Math.max(220, Math.min(startH + (ev.clientY-startY), window.innerHeight - 74 - w.y));
+    applyBounds(id);
+  }
+  function onUp(){
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    w.el.style.transition = '';
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function toggleMaximize(id, force){
+  const w = windows[id];
+  const top = 28, dockH = 74;
+  if (w.maximized && !force){
+    const prev = w.prevBounds || { x:120, y:70, width:640, height:440 };
+    Object.assign(w, prev);
+    w.maximized = false; w.snapped = null;
+  } else if (!w.maximized) {
+    if (!w.snapped) w.prevBounds = { x:w.x, y:w.y, width:w.width, height:w.height };
+    w.x = 0; w.y = top; w.width = window.innerWidth; w.height = window.innerHeight - top - dockH;
+    w.maximized = true; w.snapped = null;
+  }
+  applyBounds(id);
+}
+
+function minimizeWindow(id){
+  const w = windows[id];
+  w.el.classList.add('minimizing');
+  w.minimized = true;
+  if (activeId === id) activeId = null;
+  setTimeout(() => { w.el.style.display = 'none'; w.el.classList.remove('minimizing'); }, 200);
+  renderDock();
+  updateMenubarAppName();
+}
+function restoreWindow(id){
+  const w = windows[id];
+  w.minimized = false;
+  w.el.style.display = 'flex';
+  w.el.classList.add('opening');
+  requestAnimationFrame(() => w.el.classList.remove('opening'));
+  renderDock();
+}
+function closeWindow(id){
+  const w = windows[id];
+  w.el.classList.add('closing');
+  setTimeout(() => {
+    w.el.remove();
+    delete windows[id];
+    delete openWindows[w.appType];
+    if (activeId === id) activeId = null;
+    renderDock();
+    updateMenubarAppName();
+  }, 200);
+}
+function focusWindow(id){
+  const w = windows[id];
+  if (!w || w.minimized) return;
+  activeId = id;
+  Object.values(windows).forEach(x => x.el.classList.toggle('inactive', x.id !== id));
+  w.zIndex = ++zTop;
+  w.el.style.zIndex = w.zIndex;
+  renderDock();
+  updateMenubarAppName();
+}
+function taskbarIconClick(appType){
+  const id = openWindows[appType];
+  if (!id){ openApp(appType); return; }
+  const w = windows[id];
+  if (w.minimized){ restoreWindow(id); focusWindow(id); }
+  else if (activeId === id){ minimizeWindow(id); }
+  else { focusWindow(id); }
+}
+
+/* ============================= MENU BAR =============================
+   The AI trigger lives here (a menu-bar "extra") rather than in the Dock —
+   on a real Mac that's exactly where a Siri-like icon sits, so it's the
+   more authentic location for this OS's system-level AI affordance. */
+function updateMenubarAppName(){
+  const nameEl = $('#menubar-appname');
+  const w = activeId ? windows[activeId] : null;
+  nameEl.textContent = w ? APP_DEFS[w.appType].title : 'Finder';
+}
+function renderMenubar(){
+  $('#apple-logo').innerHTML = ICONS.apple;
+  const tray = $('#menubar-tray');
+  tray.innerHTML = `
+    <div class="bubble-wrap">
+      <button id="ai-menubar-btn" class="mb-icon-btn ai-menubar-btn" title="AI Assistant (Ctrl+Space)"><span class="w-4 h-4 block">${ICONS.ai}</span></button>
+      <div class="bubble bubble-bottom">Opens the AI assistant — LivingOS's menu-bar "extra" that can reshape this whole desktop, or open/close apps, from one instruction.</div>
+    </div>
+    <button id="mb-spotlight" class="mb-icon-btn" title="Spotlight Search"><span class="w-4 h-4 block">${ICONS.search}</span></button>
+    <button id="mb-wifi" class="mb-icon-btn" title="Wi-Fi"><span class="w-4 h-4 block">${ICONS.wifi}</span></button>
+    <button id="mb-volume" class="mb-icon-btn" title="Sound"><span class="w-4 h-4 block">${ICONS.volume}</span></button>
+    <span class="mb-icon-btn" style="cursor:default;" title="Battery"><span class="w-4 h-4 block">${ICONS.battery}</span></span>
+    <button id="mb-clock" class="mb-item px-2 py-1 rounded hover:bg-black/5" style="white-space:nowrap;"></button>
+  `;
+  tray.querySelector('#ai-menubar-btn').onclick = e => { e.stopPropagation(); toggleAIBar(); };
+  tray.querySelector('#mb-spotlight').onclick = e => { e.stopPropagation(); toggleSpotlight(); };
+  tray.querySelector('#mb-wifi').onclick = e => { e.stopPropagation(); openTrayPopup('net'); };
+  tray.querySelector('#mb-volume').onclick = e => { e.stopPropagation(); openTrayPopup('net'); };
+  tray.querySelector('#mb-clock').onclick = e => { e.stopPropagation(); openTrayPopup('clock'); };
+  tickClock();
+  updateMenubarAppName();
+}
+function tickClock(){
+  const now = new Date();
+  const c = $('#mb-clock');
+  if (c) c.textContent = now.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}) + '  ' + now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+setInterval(tickClock, 1000);
+
+let volumeLevel = 65;
+function openTrayPopup(kind){
+  const pop = $('#tray-popup');
+  if (kind === 'net'){
+    pop.innerHTML = `
+      <div class="text-sm font-medium mb-3">Control Center</div>
+      <div class="flex items-center gap-3 mb-2 p-2 rounded" style="background:var(--hover-bg)">
+        <span class="w-5 h-5">${ICONS.wifi}</span>
+        <div class="flex-1">
+          <div class="text-sm">Home-WiFi-5G</div>
+          <div class="text-xs opacity-70">Connected, secured</div>
+        </div>
+      </div>
+      <div class="text-xs opacity-70 mb-1 mt-3">Other networks</div>
+      <div class="text-sm py-1 opacity-80">Guest-Network</div>
+      <div class="text-sm py-1 opacity-80">Neighbor_5G_Ext</div>
+      <div class="flex items-center justify-between mt-4 p-2 rounded" style="background:var(--hover-bg)">
+        <span class="text-sm flex items-center gap-2">${ICONS.volume.replace('viewBox="0 0 24 24"','viewBox="0 0 24 24" width="16" height="16"')} Sound</span>
+        <input id="vol-slider" type="range" min="0" max="100" value="${volumeLevel}" class="w-32">
+      </div>
+    `;
+    setTimeout(() => {
+      const s = $('#vol-slider');
+      if (s) s.addEventListener('input', e => { volumeLevel = e.target.value; });
+    });
+  } else {
+    pop.innerHTML = `
+      <div class="text-center">
+        <div class="text-2xl font-light">${new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit', second:'2-digit'})}</div>
+        <div class="text-sm opacity-70 mt-1">${new Date().toLocaleDateString([], {weekday:'long', month:'long', day:'numeric', year:'numeric'})}</div>
+      </div>
+    `;
+  }
+  pop.classList.remove('hidden');
+}
+function closeTrayPopup(){ $('#tray-popup').classList.add('hidden'); }
+
+/* ============================= DOCK =============================
+   Finder and Trash are always rendered first/last with dividers around the
+   middle "running apps" section, matching the real macOS Dock convention
+   of pinning Finder/Trash at fixed ends. Click handling reuses the same
+   taskbarIconClick() open/restore/minimize/focus logic as windows.html —
+   the Dock is just a different visual container around identical behavior. */
+function renderDock(){
+  const dock = $('#dock');
+  dock.innerHTML = '';
+
+  const finderBtn = document.createElement('button');
+  finderBtn.className = 'dock-icon-btn' + (openWindows['explorer'] ? ' running' : '');
+  finderBtn.innerHTML = `<span class="w-9 h-9 block">${ICONS.pc}</span><span class="run-dot"></span>`;
+  finderBtn.title = 'Finder';
+  finderBtn.onclick = e => { e.stopPropagation(); taskbarIconClick('explorer'); };
+  dock.appendChild(finderBtn);
+
+  const divider = document.createElement('div');
+  divider.className = 'dock-divider';
+  dock.appendChild(divider);
+
+  const running = new Set(Object.values(windows).map(w => w.appType));
+  const appList = [...new Set([...PINNED_APPS.filter(a => a !== 'explorer'), ...running])].filter(a => a !== 'explorer' && a !== 'recyclebin');
+
+  appList.forEach(appType => {
+    const def = APP_DEFS[appType];
+    const id = openWindows[appType];
+    const btn = document.createElement('button');
+    btn.className = 'dock-icon-btn' + (id ? ' running' : '');
+    btn.innerHTML = `<span class="w-9 h-9 block">${ICONS[def.icon]}</span><span class="run-dot"></span>`;
+    btn.title = def.title;
+    btn.onclick = e => { e.stopPropagation(); taskbarIconClick(appType); };
+    dock.appendChild(btn);
+  });
+
+  const divider2 = document.createElement('div');
+  divider2.className = 'dock-divider';
+  dock.appendChild(divider2);
+
+  const trashBtn = document.createElement('button');
+  trashBtn.className = 'dock-icon-btn' + (openWindows['recyclebin'] ? ' running' : '');
+  trashBtn.innerHTML = `<span class="w-9 h-9 block">${ICONS.recycle}</span><span class="run-dot"></span>`;
+  trashBtn.title = 'Trash';
+  trashBtn.onclick = e => { e.stopPropagation(); taskbarIconClick('recyclebin'); };
+  dock.appendChild(trashBtn);
+}
+
+/* ============================= SPOTLIGHT =============================
+   macOS's answer to the Windows Start Menu: no pinned grid or recommended
+   section, just a single live-filtered list built straight from APP_DEFS. */
+function toggleSpotlight(){
+  const sp = $('#spotlight');
+  sp.classList.contains('hidden') ? openSpotlight() : closeSpotlight();
+}
+function openSpotlight(){
+  const sp = $('#spotlight');
+  const allApps = Object.keys(APP_DEFS).map(k => APP_DEFS[k]);
+  sp.innerHTML = `
+    <div class="flex items-center gap-3 px-4 py-3">
+      <span class="w-5 h-5 opacity-60">${ICONS.search}</span>
+      <input id="spotlight-input" class="flex-1 bg-transparent outline-none text-lg selectable" placeholder="Spotlight Search">
+    </div>
+    <div id="spotlight-results" class="p-1.5" style="border-top:1px solid var(--border);"></div>
+  `;
+  const results = $('#spotlight-results');
+  function fillResults(list){
+    results.innerHTML = '';
+    list.forEach(def => {
+      const row = document.createElement('button');
+      row.className = 'menu-item-btn';
+      row.innerHTML = `<span class="flex items-center gap-3"><span class="w-5 h-5">${ICONS[def.icon]}</span>${def.title}</span>`;
+      row.onclick = () => { openApp(def.appType); closeSpotlight(); };
+      results.appendChild(row);
+    });
+    if (!list.length) results.innerHTML = '<div class="text-sm opacity-60 py-6 text-center">No results</div>';
+  }
+  fillResults(allApps);
+  const input = $('#spotlight-input');
+  input.addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    fillResults(allApps.filter(d => d.title.toLowerCase().includes(q)));
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){
+      const first = results.querySelector('.menu-item-btn');
+      if (first) first.click();
+    }
+  });
+  sp.classList.remove('hidden');
+  setTimeout(() => input.focus(), 30);
+}
+function closeSpotlight(){ $('#spotlight').classList.add('hidden'); }
+
+/* ============================= APPS ============================= */
+const APP_DEFS = {
+  explorer: {
+    appType:'explorer', title:'Finder', icon:'pc', width:600, height:400,
+    render(container){
+      container.innerHTML = `
+        <div class="p-4 grid grid-cols-3 gap-4 selectable">
+          ${['Macintosh HD','Documents','Downloads','Pictures','Desktop','iCloud Drive'].map(n => `
+            <div class="flex flex-col items-center gap-1 p-3 rounded" style="background:var(--surface-alt)">
+              <span class="w-9 h-9">${ICONS.pc}</span>
+              <span class="text-xs text-center">${n}</span>
+            </div>`).join('')}
+        </div>`;
+    }
+  },
+  recyclebin: {
+    appType:'recyclebin', title:'Trash', icon:'recycle', width:500, height:340,
+    render(container){
+      container.innerHTML = `
+        <div class="flex-1 flex flex-col items-center justify-center gap-2 opacity-70 selectable">
+          <span class="w-14 h-14">${ICONS.recycle}</span>
+          <div class="text-sm">Trash is empty</div>
+        </div>`;
+    }
+  },
+  notepad: {
+    appType:'notepad', title:'Untitled — TextEdit', icon:'notepad', width:640, height:460,
+    render(container, id, opts){
+      let currentFile = opts.file || null;
+      container.innerHTML = `
+        <div class="flex items-center gap-3 px-2 py-1 text-xs" style="border-bottom:1px solid var(--border)">
+          <div class="relative">
+            <button data-menu="file" class="menu-item-btn px-2 py-1">File</button>
+            <div class="submenu hidden panel absolute left-0 top-full rounded-lg p-1.5 shadow-2xl w-40 z-10"></div>
+          </div>
+        </div>
+        <textarea class="flex-1 w-full p-3 text-sm outline-none resize-none selectable" style="background:var(--surface); color:var(--text-primary); font-family:Consolas,monospace;" spellcheck="false"></textarea>
+        <div class="px-3 py-1 text-[11px] opacity-60" style="border-top:1px solid var(--border)">Ln 1, Col 1</div>
+      `;
+      const textarea = container.querySelector('textarea');
+      const fileMenuBtn = container.querySelector('[data-menu="file"]');
+      const submenu = container.querySelector('.submenu');
+      const titleEl = windows[id].el.querySelector('.title-text');
+
+      function setTitle(){ titleEl.textContent = (currentFile || 'Untitled') + ' — TextEdit'; }
+      function loadFile(name){
+        currentFile = name;
+        textarea.value = state.files[name] ?? '';
+        setTitle();
+      }
+      function buildMenu(){
+        submenu.innerHTML = '';
+        const mkItem = (label, action) => {
+          const b = document.createElement('button');
+          b.className = 'menu-item-btn'; b.textContent = label;
+          b.onclick = () => { action(); submenu.classList.add('hidden'); };
+          submenu.appendChild(b);
+        };
+        mkItem('New', () => { currentFile = null; textarea.value=''; setTitle(); });
+        mkItem('Save', () => {
+          const name = currentFile || ('Untitled-' + Date.now() + '.txt');
+          state.files[name] = textarea.value;
+          saveFiles();
+          if (!currentFile){
+            currentFile = name;
+            if (!state.desktopIcons.find(d => d.name === name)){
+              state.desktopIcons.push({ id:'doc-'+Date.now(), name, icon:'textfile', type:'file' });
+              saveDesktopIcons(); renderDesktopIcons();
+            }
+          }
+          setTitle();
+        });
+        const openWrap = document.createElement('div');
+        openWrap.className = 'group relative';
+        const openBtn = document.createElement('button');
+        openBtn.className = 'menu-item-btn'; openBtn.innerHTML = '<span>Open</span><span class="text-xs opacity-60">›</span>';
+        const openSub = document.createElement('div');
+        openSub.className = 'submenu hidden group-hover:flex flex-col panel absolute left-full top-0 rounded-lg p-1.5 shadow-2xl w-44';
+        Object.keys(state.files).forEach(name => {
+          const b = document.createElement('button');
+          b.className = 'menu-item-btn'; b.textContent = name;
+          b.onclick = () => { loadFile(name); submenu.classList.add('hidden'); };
+          openSub.appendChild(b);
+        });
+        openWrap.appendChild(openBtn); openWrap.appendChild(openSub);
+        submenu.appendChild(openWrap);
+      }
+      buildMenu();
+      fileMenuBtn.onclick = (e) => { e.stopPropagation(); buildMenu(); submenu.classList.toggle('hidden'); };
+      document.addEventListener('click', () => submenu.classList.add('hidden'));
+
+      if (currentFile) loadFile(currentFile); else setTitle();
+
+      return {
+        onOpenOpts(o){ if (o && o.file) loadFile(o.file); }
+      };
+    },
+    onReopen(id, opts){ if (opts.file && windows[id].api) windows[id].api.onOpenOpts(opts); }
+  },
+  settings: {
+    appType:'settings', title:'System Settings', icon:'settings', width:700, height:480,
+    render(container, id, opts){
+      const pages = ['System','Bluetooth & devices','Network & internet','Appearance','About'];
+      container.innerHTML = `
+        <div class="flex flex-1 h-full">
+          <div class="w-48 p-2 flex flex-col gap-1 selectable" style="border-right:1px solid var(--border)">
+            ${pages.map(p => `<button data-page="${p}" class="menu-item-btn text-left">${p}</button>`).join('')}
+          </div>
+          <div class="flex-1 p-5 overflow-auto" id="settings-content"></div>
+        </div>`;
+      const content = container.querySelector('#settings-content');
+      const nav = container.querySelectorAll('[data-page]');
+      function show(page){
+        nav.forEach(b => b.style.background = b.dataset.page === page ? 'var(--active-bg)' : '');
+        if (page === 'System'){
+          content.innerHTML = `
+            <h2 class="text-lg font-semibold mb-4">System</h2>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between p-2 rounded" style="background:var(--surface-alt)"><span>Device name</span><span class="opacity-70">MacBook-Simulator</span></div>
+              <div class="flex justify-between p-2 rounded" style="background:var(--surface-alt)"><span>Chip</span><span class="opacity-70">Virtual Silicon @ 3.60GHz</span></div>
+              <div class="flex justify-between p-2 rounded" style="background:var(--surface-alt)"><span>Memory</span><span class="opacity-70">16 GB</span></div>
+              <div class="flex justify-between p-2 rounded" style="background:var(--surface-alt)"><span>Edition</span><span class="opacity-70">LivingOS macOS Environment (Simulation)</span></div>
+            </div>`;
+        } else if (page === 'Bluetooth & devices'){
+          content.innerHTML = `
+            <h2 class="text-lg font-semibold mb-4">Bluetooth & devices</h2>
+            <label class="flex items-center justify-between p-3 rounded mb-3" style="background:var(--surface-alt)">
+              <span>Bluetooth</span><input type="checkbox" class="switch" checked>
+            </label>
+            <div class="text-sm opacity-70 mb-2">My Devices</div>
+            <div class="text-sm py-1">AirPods Pro</div>
+            <div class="text-sm py-1">Magic Keyboard</div>`;
+        } else if (page === 'Network & internet'){
+          content.innerHTML = `
+            <h2 class="text-lg font-semibold mb-4">Network & internet</h2>
+            <label class="flex items-center justify-between p-3 rounded mb-3" style="background:var(--surface-alt)">
+              <span>Wi-Fi</span><input type="checkbox" class="switch" checked>
+            </label>
+            <div class="text-sm p-2 rounded" style="background:var(--surface-alt)">Connected to Home-WiFi-5G</div>`;
+        } else if (page === 'Appearance'){
+          content.innerHTML = `
+            <h2 class="text-lg font-semibold mb-4">Appearance</h2>
+            <label class="flex items-center justify-between p-3 rounded" style="background:var(--surface-alt)">
+              <span>Dark mode</span><input type="checkbox" class="switch theme-toggle" ${state.theme==='dark'?'checked':''}>
+            </label>`;
+        } else {
+          content.innerHTML = `
+            <h2 class="text-lg font-semibold mb-4">About</h2>
+            <div class="text-sm opacity-80">LivingOS macOS Environment<br/>Built with HTML, Tailwind CSS and vanilla JavaScript.</div>`;
+        }
+      }
+      nav.forEach(b => b.onclick = () => show(b.dataset.page));
+      show(opts.page === 'personalization' ? 'Appearance' : 'System');
+      return { onOpenOpts(o){ if (o.page === 'personalization') show('Appearance'); } };
+    },
+    onReopen(id, opts){ if (opts.page && windows[id].api) windows[id].api.onOpenOpts(opts); }
+  },
+  browser: {
+    appType:'browser', title:'Safari', icon:'edge', width:820, height:540,
+    render(container){
+      container.innerHTML = `
+        <div class="flex items-center gap-2 p-2" style="border-bottom:1px solid var(--border)">
+          <button data-nav="back" class="w-7 h-7 flex items-center justify-center rounded" style="opacity:.7">${ICONS.back}</button>
+          <button data-nav="fwd" class="w-7 h-7 flex items-center justify-center rounded" style="opacity:.7">${ICONS.forward}</button>
+          <button data-nav="reload" class="w-7 h-7 flex items-center justify-center rounded" style="opacity:.7">${ICONS.refresh}</button>
+          <input class="address-bar flex-1 rounded-full px-4 py-1.5 text-sm outline-none selectable" style="background:var(--hover-bg); color:var(--text-primary);" value="about:start">
+        </div>
+        <div class="browser-page flex-1 overflow-auto"></div>`;
+      const page = container.querySelector('.browser-page');
+      const addressBar = container.querySelector('.address-bar');
+      const hist = ['about:start']; let hIndex = 0;
+
+      const startPage = () => `
+        <div class="h-full flex flex-col items-center justify-center gap-4 selectable">
+          <div class="text-3xl font-semibold" style="color:var(--accent)">Bling</div>
+          <div class="w-96 rounded-full px-4 py-2 flex items-center gap-2" style="background:var(--surface-alt)">
+            <span class="w-4 h-4 opacity-60">${ICONS.search}</span>
+            <span class="text-sm opacity-60">Type a search above and press Enter</span>
+          </div>
+        </div>`;
+      const resultsPage = (q) => `
+        <div class="p-6 selectable max-w-2xl mx-auto">
+          <div class="text-sm opacity-60 mb-4">About 4 results for "${q}"</div>
+          ${[1,2,3].map(i => `
+            <div class="mb-5">
+              <div class="text-xs opacity-60">https://example.com/${encodeURIComponent(q).toLowerCase()}/${i}</div>
+              <div class="text-lg" style="color:var(--accent)">${q} — Result ${i}</div>
+              <div class="text-sm opacity-70">This is a simulated search result snippet describing "${q}" for demonstration purposes within the sandboxed browser.</div>
+            </div>`).join('')}
+        </div>`;
+
+      function render(target){
+        if (!target || target === 'about:start'){ addressBar.value='about:start'; page.innerHTML = startPage(); }
+        else { addressBar.value = target; page.innerHTML = resultsPage(target); }
+      }
+      function navigate(q){
+        render(q);
+        hist.splice(hIndex+1); hist.push(q || 'about:start'); hIndex = hist.length-1;
+      }
+      addressBar.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(addressBar.value.trim()); });
+      container.querySelector('[data-nav="reload"]').onclick = () => render(hist[hIndex]);
+      container.querySelector('[data-nav="back"]').onclick = () => { if (hIndex>0){ hIndex--; render(hist[hIndex]); } };
+      container.querySelector('[data-nav="fwd"]').onclick = () => { if (hIndex<hist.length-1){ hIndex++; render(hist[hIndex]); } };
+      render('about:start');
+    }
+  },
+  cmd: {
+    appType:'cmd', title:'Terminal', icon:'cmd', width:640, height:420,
+    render(container){
+      container.innerHTML = `
+        <div class="flex-1 overflow-auto p-2" id="cmd-output"></div>
+        <div class="flex items-center px-2 pb-2 gap-1" id="cmd-inputline">
+          <span id="cmd-prompt">user@LivingOS %</span>
+          <input id="cmd-input" class="flex-1" autocomplete="off" spellcheck="false">
+        </div>`;
+      const out = container.querySelector('#cmd-output');
+      const input = container.querySelector('#cmd-input');
+      const history = []; let hIdx = -1;
+
+      function println(t=''){ const l = document.createElement('div'); l.textContent = t; l.style.whiteSpace='pre-wrap'; out.appendChild(l); }
+      println('LivingOS Terminal — zsh');
+      println('Type "help" to see available commands.');
+      println('');
+
+      function exec(cmdline){
+        const trimmed = cmdline.trim();
+        const spaceIdx = trimmed.indexOf(' ');
+        const name = (spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx)).toLowerCase();
+        const arg = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx+1);
+        switch(name){
+          case '': break;
+          case 'help':
+            println('Available commands:');
+            println('  help     Displays this help message');
+            println('  dir      Lists files and directories');
+            println('  date     Displays the current date');
+            println('  time     Displays the current time');
+            println('  cls      Clears the screen');
+            println('  echo     Displays messages, e.g. echo hello');
+            println('  ver      Displays version information');
+            break;
+          case 'dir':
+            println('Documents  Downloads  Pictures  Desktop');
+            Object.keys(state.files).forEach(f => println(f));
+            println('');
+            break;
+          case 'date': println('The current date is: ' + new Date().toLocaleDateString()); break;
+          case 'time': println('The current time is: ' + new Date().toLocaleTimeString()); break;
+          case 'cls': out.innerHTML = ''; break;
+          case 'echo': println(arg); break;
+          case 'ver': println('LivingOS [macOS Simulation Edition]'); break;
+          default:
+            println(`zsh: command not found: ${name}`);
+        }
+      }
+      function submit(){
+        const val = input.value;
+        println('user@LivingOS % ' + val);
+        if (val.trim()) { history.push(val); }
+        hIdx = history.length;
+        exec(val);
+        input.value = '';
+        out.scrollTop = out.scrollHeight;
+      }
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') submit();
+        else if (e.key === 'ArrowUp'){ if (hIdx>0){ hIdx--; input.value = history[hIdx]||''; } e.preventDefault(); }
+        else if (e.key === 'ArrowDown'){ if (hIdx<history.length){ hIdx++; input.value = history[hIdx]||''; } e.preventDefault(); }
+      });
+      container.addEventListener('click', () => input.focus());
+      setTimeout(() => input.focus(), 250);
+    }
+  },
+  codeeditor: {
+    appType:'codeeditor', title:'Code Editor', icon:'code', width:640, height:460,
+    render(container){
+      const sample = '// workspace.config.js\nfunction initializeWorkspace(mode) {\n  console.log("Adapting environment for:", mode);\n  const layout = resolveLayout(mode);\n  applyTheme(layout.theme);\n  return layout;\n}\n\nexport default initializeWorkspace;\n';
+      container.innerHTML = `
+        <div class="flex flex-1 h-full" style="background:#1e1e1e; color:#d4d4d4; font-family:Consolas,monospace;">
+          <div class="w-10 flex flex-col items-center gap-3 py-2" style="background:#252526; border-right:1px solid #333;">
+            <span class="w-5 h-5 opacity-80">${ICONS.code}</span>
+            <span class="w-5 h-5 opacity-35">${ICONS.textfile}</span>
+            <span class="w-5 h-5 opacity-35">${ICONS.settings}</span>
+          </div>
+          <div class="flex-1 flex flex-col min-w-0">
+            <div class="flex text-xs">
+              <div class="px-3 py-1.5" style="background:#1e1e1e; border-top:2px solid #38bdf8;">workspace.config.js</div>
+            </div>
+            <div class="flex-1 flex overflow-auto">
+              <div id="ce-gutter" class="text-right px-2 py-2 select-none" style="color:#5a5a5a; min-width:36px; line-height:20px; font-size:13px;"></div>
+              <textarea id="ce-editor" class="flex-1 py-2 pr-3 outline-none resize-none selectable" style="background:#1e1e1e; color:#d4d4d4; border:none; line-height:20px; font-size:13px;" spellcheck="false"></textarea>
+            </div>
+            <div class="text-[11px] px-3 py-1 flex justify-between shrink-0" style="background:#007acc; color:#fff;">
+              <span>main*</span><span>Ln 1, Col 1 &nbsp; UTF-8 &nbsp; JavaScript</span>
+            </div>
+          </div>
+        </div>`;
+      const gutter = container.querySelector('#ce-gutter');
+      const editor = container.querySelector('#ce-editor');
+      editor.value = sample;
+      function updateGutter(){
+        const lines = editor.value.split('\n').length;
+        gutter.innerHTML = Array.from({ length: lines }, (_, i) => i + 1).join('<br>');
+      }
+      editor.addEventListener('input', updateGutter);
+      editor.addEventListener('scroll', () => { gutter.scrollTop = editor.scrollTop; });
+      updateGutter();
+    }
+  },
+  design: {
+    appType:'design', title:'Design Studio', icon:'palette', width:760, height:520,
+    render(container){
+      const colors = ['#f43f5e','#f97316','#eab308','#22c55e','#0ea5e9','#8b5cf6','#111827','#ffffff'];
+      container.innerHTML = `
+        <div class="flex flex-1 h-full selectable">
+          <div class="w-16 flex flex-col items-center gap-2 py-3" style="background:var(--surface-alt); border-right:1px solid var(--border);">
+            <button data-tool="brush" class="ds-tool w-9 h-9 rounded flex items-center justify-center">${ICONS.brush}</button>
+            <button data-tool="eraser" class="ds-tool w-9 h-9 rounded flex items-center justify-center">${ICONS.eraser}</button>
+            <div class="w-8 h-px my-1" style="background:var(--border)"></div>
+            ${colors.map(c => `<button class="ds-color w-6 h-6 rounded-full" data-color="${c}" style="background:${c}; border:1px solid var(--border);"></button>`).join('')}
+            <div class="w-8 h-px my-1" style="background:var(--border)"></div>
+            <button id="ds-clear" class="text-[10px] opacity-70">Clear</button>
+          </div>
+          <div class="flex-1 flex items-center justify-center p-3 overflow-auto" style="background:var(--surface-alt)">
+            <canvas id="ds-canvas" width="520" height="420" style="background:#fff; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,.25); cursor:crosshair;"></canvas>
+          </div>
+          <div class="w-40 p-3 text-xs shrink-0" style="border-left:1px solid var(--border);">
+            <div class="font-medium mb-2">Reference</div>
+            ${['linear-gradient(135deg,#f97316,#f43f5e)','linear-gradient(135deg,#0ea5e9,#8b5cf6)','linear-gradient(135deg,#22c55e,#eab308)'].map(g => `<div class="w-full h-16 rounded mb-2" style="background:${g}"></div>`).join('')}
+          </div>
+        </div>`;
+      const canvas = container.querySelector('#ds-canvas');
+      const ctx = canvas.getContext('2d');
+      let tool = 'brush', color = colors[0], drawing = false, lastX = 0, lastY = 0;
+      function setActiveTool(btn){
+        container.querySelectorAll('.ds-tool').forEach(x => x.style.background = '');
+        btn.style.background = 'var(--active-bg)';
+      }
+      container.querySelectorAll('.ds-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; setActiveTool(b); });
+      setActiveTool(container.querySelector('[data-tool="brush"]'));
+      container.querySelectorAll('.ds-color').forEach(b => b.onclick = () => {
+        color = b.dataset.color; tool = 'brush';
+        setActiveTool(container.querySelector('[data-tool="brush"]'));
+      });
+      function fillWhite(){ ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+      container.querySelector('#ds-clear').onclick = () => fillWhite();
+      fillWhite();
+      function pos(e){ const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+      canvas.addEventListener('mousedown', e => { drawing = true; [lastX, lastY] = pos(e); });
+      canvas.addEventListener('mousemove', e => {
+        if (!drawing) return;
+        const [x, y] = pos(e);
+        ctx.strokeStyle = tool === 'eraser' ? '#fff' : color;
+        ctx.lineWidth = tool === 'eraser' ? 18 : 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
+        [lastX, lastY] = [x, y];
+      });
+      canvas.addEventListener('mouseleave', () => { drawing = false; });
+      window.addEventListener('mouseup', () => { drawing = false; });
+    }
+  },
+  media: {
+    appType:'media', title:'Music', icon:'music', width:520, height:460,
+    render(container){
+      container.innerHTML = `
+        <div class="flex-1 flex flex-col items-center justify-center gap-5 p-6 selectable" style="background:linear-gradient(160deg,#3b1d2b,#7c3a2d); color:#fff;">
+          <div class="w-44 h-44 rounded-2xl" style="background:linear-gradient(135deg,#f97316,#f43f5e,#8b5cf6); box-shadow:0 20px 50px rgba(0,0,0,.4);"></div>
+          <div class="text-center">
+            <div class="text-lg font-semibold">Ambient Horizons</div>
+            <div class="text-sm opacity-70">Chill Collective</div>
+          </div>
+          <div class="w-full max-w-xs">
+            <div class="w-full h-1.5 rounded-full" style="background:rgba(255,255,255,.2);">
+              <div id="mp-progress" class="h-full rounded-full" style="width:0%; background:#fca5a5;"></div>
+            </div>
+            <div class="flex justify-between text-[10px] opacity-60 mt-1"><span id="mp-time">0:00</span><span>3:42</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <button id="mp-prev" class="opacity-80 w-5 h-5">${ICONS.back}</button>
+            <button id="mp-play" class="w-12 h-12 rounded-full flex items-center justify-center text-lg" style="background:rgba(255,255,255,.15);">&#9658;</button>
+            <button id="mp-next" class="opacity-80 w-5 h-5">${ICONS.forward}</button>
+          </div>
+        </div>`;
+      const bar = container.querySelector('#mp-progress');
+      const timeEl = container.querySelector('#mp-time');
+      const playBtn = container.querySelector('#mp-play');
+      let playing = false, t = 0, timer = null;
+      const DURATION = 222;
+      function fmt(s){ return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+      function tick(){ t = (t + 1) % DURATION; bar.style.width = (t / DURATION * 100) + '%'; timeEl.textContent = fmt(t); }
+      function resetTrack(){ t = 0; bar.style.width = '0%'; timeEl.textContent = '0:00'; }
+      playBtn.onclick = () => {
+        playing = !playing;
+        playBtn.innerHTML = playing ? '&#10074;&#10074;' : '&#9658;';
+        if (playing) timer = setInterval(tick, 1000); else clearInterval(timer);
+      };
+      container.querySelector('#mp-prev').onclick = resetTrack;
+      container.querySelector('#mp-next').onclick = resetTrack;
+    }
+  },
+};
+
+/* ============================= AI WORKSPACE ASSISTANT =============================
+   IMPORTANT: this is a scripted demo, not a real AI integration — there is no
+   LLM call, no network request, no NLU model. `detectMode`/`findAppInText`
+   are plain regex/substring matching, and each runXxxMode() is a fixed
+   sequence of DOM changes with `await sleep(ms)` between steps purely so a
+   human can *see* each step happen instead of the layout jumping instantly.
+   The point of the demo is "what would it look like if an AI could do this",
+   not a working natural-language understanding engine. Identical logic to
+   windows.html; only the pixel offsets (menu bar height, Dock height) differ. */
+let aiBusy = false;
+function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+function clearLog(){
+  const log = $('#ai-log');
+  log.innerHTML = '';
+  log.classList.add('hidden');
+}
+function logStep(text){
+  const log = $('#ai-log');
+  log.classList.remove('hidden');
+  const line = document.createElement('div');
+  line.className = 'ai-log-line';
+  line.innerHTML = `<span class="ai-log-dot"></span><span>${text}</span>`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+function setAIBusy(on){
+  aiBusy = on;
+  const input = $('#ai-input');
+  const orb = $('#ai-orb');
+  if (input) input.disabled = on;
+  if (orb) orb.classList.toggle('busy', on);
+}
+
+function aiAnimateBounds(id, mutate){
+  const w = windows[id];
+  if (!w) return;
+  w.el.classList.add('ai-move');
+  mutate(w);
+  applyBounds(id);
+  setTimeout(() => w.el.classList.remove('ai-move'), 600);
+}
+function closeApps(list){
+  list.forEach(app => { if (openWindows[app]) closeWindow(openWindows[app]); });
+}
+function snapPair(appA, appB){
+  const top = 28, dockH = 74;
+  const vw = window.innerWidth, vh = window.innerHeight - top - dockH;
+  const idA = openWindows[appA], idB = openWindows[appB];
+  if (idA) aiAnimateBounds(idA, w => {
+    w.maximized = false;
+    if (!w.snapped) w.prevBounds = { x:w.x, y:w.y, width:w.width, height:w.height };
+    w.x = 0; w.y = top; w.width = vw / 2; w.height = vh; w.snapped = 'left';
+  });
+  if (idB) aiAnimateBounds(idB, w => {
+    w.maximized = false;
+    if (!w.snapped) w.prevBounds = { x:w.x, y:w.y, width:w.width, height:w.height };
+    w.x = vw / 2; w.y = top; w.width = vw / 2; w.height = vh; w.snapped = 'right';
+  });
+  if (idA) focusWindow(idA);
+  if (idB) focusWindow(idB);
+}
+function centerWindow(app, width, height){
+  const id = openWindows[app];
+  if (!id) return;
+  aiAnimateBounds(id, w => {
+    w.maximized = false; w.snapped = null;
+    if (width) w.width = width;
+    if (height) w.height = height;
+    w.x = (window.innerWidth - w.width) / 2;
+    w.y = (window.innerHeight - 28 - 74 - w.height) / 2 + 28;
+  });
+  focusWindow(id);
+}
+function layoutCreative(){
+  const top = 28, dockH = 74;
+  const vw = window.innerWidth, vh = window.innerHeight - top - dockH;
+  const dId = openWindows['design'];
+  if (dId) aiAnimateBounds(dId, w => { w.maximized = false; w.snapped = null; w.x = vw * 0.06; w.y = top + 30; w.width = vw * 0.88; w.height = vh - 60; });
+  openApp('explorer');
+  const eId = openWindows['explorer'];
+  if (eId) aiAnimateBounds(eId, w => { w.maximized = false; w.snapped = null; w.width = 260; w.height = 220; w.x = vw - 280; w.y = top + 16; });
+  if (dId) focusWindow(dId);
+}
+function setDim(on){
+  $('#desktop-icons').classList.toggle('ai-dim', on);
+  const wifiBtn = $('#mb-wifi');
+  if (wifiBtn) wifiBtn.classList.toggle('ai-dim', on);
+}
+
+function detectMode(text){
+  const t = text.toLowerCase();
+  if (/reset|normal|default|standard desktop/.test(t)) return 'reset';
+  if (/focus|deep work|study|concentrat|code|program/.test(t)) return 'focus';
+  if (/creative|design|art|draw|paint/.test(t)) return 'creative';
+  if (/relax|media|movie|music|chill|evening|watch|unwind/.test(t)) return 'relax';
+  return null;
+}
+
+async function runFocusMode(){
+  setAIBusy(true); clearLog();
+  logStep('Analyzing current workspace…'); await sleep(400);
+  logStep('Closing entertainment apps…');
+  closeApps(['browser', 'media']);
+  await sleep(450);
+  logStep('Opening Code Editor and Terminal…');
+  openApp('codeeditor'); openApp('cmd');
+  await sleep(350);
+  logStep('Snapping windows side-by-side…');
+  snapPair('codeeditor', 'cmd');
+  await sleep(450);
+  logStep('Dimming non-essential elements…');
+  setDim(true);
+  await sleep(350);
+  logStep('Shifting ambient theme to Focus Blue…');
+  setAmbient('focus');
+  await sleep(300);
+  logStep('Workspace optimized for deep work.');
+  setAIBusy(false);
+}
+async function runCreativeMode(){
+  setAIBusy(true); clearLog();
+  logStep('Analyzing creative workflow needs…'); await sleep(400);
+  logStep('Closing unrelated windows…');
+  closeApps(['browser', 'cmd', 'codeeditor', 'media']);
+  await sleep(450);
+  logStep('Opening Design Studio…');
+  openApp('design');
+  await sleep(350);
+  logStep('Arranging canvas, tools and reference panel…');
+  setDim(false);
+  layoutCreative();
+  await sleep(450);
+  logStep('Expanding workspace to a wide layout…');
+  await sleep(300);
+  logStep('Shifting ambient theme to a warm glow…');
+  setAmbient('creative');
+  await sleep(300);
+  logStep('Creative workspace ready.');
+  setAIBusy(false);
+}
+async function runRelaxMode(){
+  setAIBusy(true); clearLog();
+  logStep('Wrapping up productivity tools…'); await sleep(400);
+  closeApps(['notepad', 'codeeditor', 'cmd', 'settings', 'explorer']);
+  await sleep(450);
+  logStep('Launching Music…');
+  openApp('media');
+  await sleep(350);
+  logStep('Centering player and hiding Dock badges…');
+  setDim(false);
+  centerWindow('media', 520, 460);
+  $('#dock').classList.add('ai-no-badges');
+  await sleep(400);
+  logStep('Shifting to a warm evening ambiance…');
+  setAmbient('relax');
+  await sleep(300);
+  logStep('Time to unwind.');
+  setAIBusy(false);
+}
+async function resetWorkspace(){
+  setAIBusy(true); clearLog();
+  logStep('Restoring the standard desktop…');
+  setDim(false);
+  $('#dock').classList.remove('ai-no-badges');
+  setAmbient('default');
+  await sleep(450);
+  logStep('Ambient theme reset to default.');
+  setAIBusy(false);
+}
+
+const MODE_RUNNERS = { focus: runFocusMode, creative: runCreativeMode, relax: runRelaxMode, reset: resetWorkspace };
+
+/* ---- generalized command engine: modes + open/close app ----
+   Both the typed AI-bar input and the simulated voice suggestions funnel
+   through runCommand() below, so "typing a sentence" and "picking a voice
+   phrase" behave identically. App-name matching is checked BEFORE mode
+   detection: without that order, a phrase like "open the code editor"
+   would match detectMode's /code/ pattern first and wrongly trigger Focus
+   Mode instead of just opening the editor. */
+const APP_ALIASES = {
+  'code editor': 'codeeditor', 'text editor': 'notepad', 'vs code': 'codeeditor',
+  'file explorer': 'explorer', 'design studio': 'design', 'media player': 'media',
+  'this pc': 'explorer', 'recycle bin': 'recyclebin', 'textedit': 'notepad',
+  'system settings': 'settings', 'finder': 'explorer', 'safari': 'browser',
+  'terminal': 'cmd', 'trash': 'recyclebin', 'notepad': 'notepad', 'editor': 'codeeditor',
+  'console': 'cmd', 'cmd': 'cmd', 'browser': 'browser', 'edge': 'browser',
+  'settings': 'settings', 'explorer': 'explorer', 'design': 'design', 'canvas': 'design',
+  'music': 'media', 'player': 'media', 'bin': 'recyclebin',
+};
+// Longest alias first: "code editor" must win over the shorter "editor"
+// substring, otherwise "open the code editor" would match "editor" -> the
+// wrong app before ever reaching the more specific alias.
+function findAppInText(t){
+  const names = Object.keys(APP_ALIASES).sort((a, b) => b.length - a.length);
+  for (const name of names){ if (t.includes(name)) return APP_ALIASES[name]; }
+  return null;
+}
+async function runOpenApp(app){
+  setAIBusy(true); clearLog();
+  logStep(`Opening ${APP_DEFS[app].title}…`);
+  openApp(app);
+  await sleep(350);
+  logStep('Done.');
+  setAIBusy(false);
+}
+async function runCloseApp(app){
+  setAIBusy(true); clearLog();
+  if (openWindows[app]){
+    logStep(`Closing ${APP_DEFS[app].title}…`);
+    closeApps([app]);
+  } else {
+    logStep(`${APP_DEFS[app].title} isn't open.`);
+  }
+  await sleep(350);
+  setAIBusy(false);
+}
+function runCommand(text){
+  if (aiBusy || !text) return;
+  const t = text.toLowerCase();
+  const app = findAppInText(t);
+  const wantsClose = /close|quit|exit|shut/.test(t);
+  const wantsOpen = /open|launch|start|show/.test(t);
+  if (app && wantsClose){ runCloseApp(app); return; }
+  if (app && wantsOpen){ runOpenApp(app); return; }
+  const mode = detectMode(t);
+  if (mode && MODE_RUNNERS[mode]){
+    MODE_RUNNERS[mode]();
+  } else {
+    clearLog();
+    logStep(`Interpreting: "${text}"`);
+    setTimeout(() => logStep('Try a mode ("focus", "creative", "relax"), or an app command like "open TextEdit" / "close Safari".'), 500);
+  }
+}
+
+function openAIBar(){
+  $('#ai-bar').classList.remove('hidden');
+  requestAnimationFrame(() => $('#ai-bar').classList.add('ai-open'));
+  setTimeout(() => { const inp = $('#ai-input'); if (inp) inp.focus(); }, 50);
+}
+function closeAIBar(){
+  const bar = $('#ai-bar');
+  if (bar.classList.contains('hidden')) return;
+  if (listening) setListening(false);
+  bar.classList.remove('ai-open');
+  setTimeout(() => bar.classList.add('hidden'), 220);
+}
+function toggleAIBar(){
+  $('#ai-bar').classList.contains('hidden') ? openAIBar() : closeAIBar();
+}
+
+/* ---- simulated voice input ----
+   No microphone, no SpeechRecognition API, no audio processing of any kind.
+   "Listening" just reveals a list of canned example phrases; clicking one
+   fakes a transcription (typeIntoInput's char-by-char reveal) and then runs
+   it through the exact same runCommand() the typed input uses. Real browser
+   speech recognition is skipped deliberately — it requires a secure context
+   and often fails outright when a file is opened via file://, which would
+   make the demo unreliable rather than impressive. */
+const VOICE_SUGGESTIONS = [
+  { group:'Rearrange the workspace', text:'Hey, enter focus mode', cmd:'enter focus mode' },
+  { group:'Rearrange the workspace', text:'Switch to relax mode', cmd:'switch to relax mode' },
+  { group:'Open an app', text:'Open the code editor', cmd:'open code editor' },
+  { group:'Open an app', text:'Open TextEdit', cmd:'open textedit' },
+  { group:'Close an app', text:'Close Safari', cmd:'close safari' },
+  { group:'Close an app', text:'Close Terminal', cmd:'close terminal' },
+];
+let listening = false;
+function renderVoiceSuggestions(){
+  const box = $('#ai-voice-suggestions');
+  box.innerHTML = '';
+  let lastGroup = null;
+  VOICE_SUGGESTIONS.forEach(s => {
+    if (s.group !== lastGroup){
+      lastGroup = s.group;
+      const label = document.createElement('div');
+      label.className = 'voice-group-label';
+      label.textContent = s.group;
+      box.appendChild(label);
+    }
+    const btn = document.createElement('button');
+    btn.className = 'voice-suggestion';
+    btn.textContent = '“' + s.text + '”';
+    btn.onclick = e => { e.stopPropagation(); speakSuggestion(s); };
+    box.appendChild(btn);
+  });
+}
+function setListening(on){
+  listening = on;
+  $('#ai-mic').classList.toggle('listening', on);
+  $('#ai-voice-panel').classList.toggle('hidden', !on);
+  if (on){
+    renderVoiceSuggestions();
+    clearLog();
+    logStep('Listening for a voice command…');
+  }
+}
+function typeIntoInput(text, cb){
+  const input = $('#ai-input');
+  input.value = '';
+  let i = 0;
+  const step = () => {
+    if (i <= text.length){
+      input.value = text.slice(0, i);
+      i++;
+      setTimeout(step, 18);
+    } else if (cb){ cb(); }
+  };
+  step();
+}
+function speakSuggestion(s){
+  setListening(false);
+  logStep(`Heard: "${s.text}"`);
+  typeIntoInput(s.text, () => {
+    setTimeout(() => { $('#ai-input').value = ''; runCommand(s.cmd); }, 350);
+  });
+}
+
+function initAIBar(){
+  const bar = $('#ai-bar');
+  bar.innerHTML = `
+    <div class="ai-panel rounded-2xl shadow-2xl p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div class="bubble-wrap">
+          <div class="flex items-center gap-2 text-xs font-medium tracking-wide cursor-default" style="color:#93c5fd;">
+            <span id="ai-orb" class="ai-orb"></span> LIVINGOS ASSISTANT
+            <span class="w-3 h-3 opacity-50">${ICONS.info}</span>
+          </div>
+          <div class="bubble bubble-bottom">This is the AI layer of LivingOS — it sits above the OS and can reshape the whole environment, or open/close individual apps, from one typed or spoken instruction.</div>
+        </div>
+        <button id="ai-close" class="text-xs opacity-50" style="color:#f2f2f7;">&#10005;</button>
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="ai-input" class="flex-1 bg-transparent outline-none text-sm selectable" style="color:#f2f2f7;" placeholder="Try &quot;enter focus mode&quot;, &quot;open TextEdit&quot;, &quot;close Safari&quot;…" />
+        <div class="bubble-wrap">
+          <button id="ai-mic" class="ai-mic-btn"><span class="w-4 h-4 block">${ICONS.mic}</span></button>
+          <div class="bubble bubble-bottom">Simulated voice input — click to "listen", then pick an example phrase to see it transcribed and executed, just like a spoken command would be.</div>
+        </div>
+        <kbd class="text-[10px] px-1.5 py-0.5 rounded" style="background:rgba(255,255,255,.08); color:#9ca3af;">Ctrl+Space</kbd>
+      </div>
+      <div class="flex items-center gap-2 mt-3 flex-wrap">
+        <div class="bubble-wrap">
+          <button class="ai-preset" data-mode="focus"><span class="w-3.5 h-3.5">${ICONS.focus}</span>Focus</button>
+          <div class="bubble bubble-bottom">Closes distractions, opens the Code Editor + Terminal side-by-side, dims non-essentials, and shifts to a dark-blue theme — a full context switch for deep work.</div>
+        </div>
+        <div class="bubble-wrap">
+          <button class="ai-preset" data-mode="creative"><span class="w-3.5 h-3.5">${ICONS.palette}</span>Creative</button>
+          <div class="bubble bubble-bottom">Opens Design Studio wide with a reference panel, closes unrelated apps, and shifts to a warm high-contrast theme suited to visual work.</div>
+        </div>
+        <div class="bubble-wrap">
+          <button class="ai-preset" data-mode="relax"><span class="w-3.5 h-3.5">${ICONS.music}</span>Relax</button>
+          <div class="bubble bubble-bottom">Wraps up productivity apps, centers Music, hides Dock badges, and shifts to a soft evening theme — signaling it's time to unwind.</div>
+        </div>
+        <div class="bubble-wrap">
+          <button class="ai-preset" data-mode="reset"><span class="w-3.5 h-3.5">${ICONS.refresh}</span>Reset</button>
+          <div class="bubble bubble-bottom">Reverts the ambient theme, dimming, and badge changes without closing anything — hands control back to you.</div>
+        </div>
+      </div>
+      <div id="ai-voice-panel" class="hidden mt-3 pt-3" style="border-top:1px solid rgba(255,255,255,.1);">
+        <div class="text-[11px] opacity-70 mb-1 flex items-center"><span class="listening-dot"></span>Listening… try saying:</div>
+        <div id="ai-voice-suggestions" class="flex flex-col gap-1"></div>
+      </div>
+      <div id="ai-log" class="hidden mt-3 pt-3 space-y-1.5 text-xs" style="border-top:1px solid rgba(255,255,255,.1); color:#d1d5db; max-height:140px; overflow-y:auto;"></div>
+    </div>`;
+
+  bar.querySelector('#ai-close').onclick = e => { e.stopPropagation(); closeAIBar(); };
+  bar.querySelectorAll('.ai-preset').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      if (aiBusy) return;
+      setListening(false);
+      $('#ai-input').value = '';
+      MODE_RUNNERS[btn.dataset.mode]();
+    };
+  });
+  bar.querySelector('#ai-mic').onclick = e => { e.stopPropagation(); if (!aiBusy) setListening(!listening); };
+  const input = bar.querySelector('#ai-input');
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){
+      const val = input.value.trim();
+      if (!val) return;
+      input.value = '';
+      setListening(false);
+      runCommand(val);
+    }
+  });
+}
+
+/* ============================= RIPPLE EFFECT ============================= */
+document.addEventListener('click', e => {
+  const target = e.target.closest('button, .desktop-icon, .dock-icon-btn, .menu-item-btn');
+  if (!target) return;
+  const rect = target.getBoundingClientRect();
+  const r = document.createElement('span');
+  const size = Math.max(rect.width, rect.height);
+  r.className = 'ripple';
+  r.style.width = r.style.height = size + 'px';
+  r.style.left = (e.clientX - rect.left - size/2) + 'px';
+  r.style.top = (e.clientY - rect.top - size/2) + 'px';
+  const prevPos = getComputedStyle(target).position;
+  if (prevPos === 'static') target.style.position = 'relative';
+  target.style.overflow = target.style.overflow || 'hidden';
+  target.appendChild(r);
+  setTimeout(() => r.remove(), 500);
+});
+
+/* ============================= GLOBAL CLICK-OUTSIDE ============================= */
+document.addEventListener('click', e => {
+  if (!e.target.closest('#context-menu')) closeContextMenu();
+  if (!e.target.closest('#spotlight') && !e.target.closest('#mb-spotlight')) closeSpotlight();
+  if (!e.target.closest('#tray-popup') && !e.target.closest('#mb-wifi') && !e.target.closest('#mb-volume') && !e.target.closest('#mb-clock')) closeTrayPopup();
+  if (!e.target.closest('#ai-bar') && !e.target.closest('#ai-menubar-btn')) closeAIBar();
+});
+window.addEventListener('resize', () => {
+  Object.values(windows).forEach(w => { clampWindow(w); applyBounds(w.id); });
+});
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.code === 'Space'){ e.preventDefault(); toggleAIBar(); return; }
+  if (e.key === 'Escape'){ closeSpotlight(); closeContextMenu(); closeTrayPopup(); closeAIBar(); }
+});
+
+/* ============================= INIT ============================= */
+setTheme(state.theme);
+renderDesktopIcons();
+renderMenubar();
+renderDock();
+initAIBar();
+</script>
+</body>
+</html>
